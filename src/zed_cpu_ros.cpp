@@ -229,7 +229,7 @@ public:
         		cv::remap(left_image,imLeftRec,M1l,M2l,cv::INTER_LINEAR);
         		cv::remap(right_image,imRightRec,M1r,M2r,cv::INTER_LINEAR);
         		hconcat(imLeftRec,imRightRec,wholeRecImage);
-        		cv::imshow("left_rectified", imLeftRec);
+        		//cv::imshow("left_rectified", imLeftRec);
 				if (rec_left_image_pub.getNumSubscribers() > 0) {
 					publishImage(imLeftRec, rec_left_image_pub, "rec_left_frame", now);
 				}
