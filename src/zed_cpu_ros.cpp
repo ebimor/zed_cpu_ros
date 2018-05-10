@@ -32,15 +32,12 @@ public:
 	 * @param[in]  frame_rate  The frame rate
 	 */
 	StereoCamera(int resolution, double frame_rate): frame_rate_(30.0) {
-				std::cout<<"Setting resolution4"<<'\n';
 
 		camera_ = new cv::VideoCapture(0);
-						std::cout<<"Setting resolution5"<<'\n';
 
 		cv::Mat raw;
 		cv::Mat left_image;
 		cv::Mat right_image;
-						std::cout<<"Setting resolution6"<<'\n';
 
 		setResolution(resolution);
 		// // this function doesn't work very well in current Opencv 2.4, so, just use ROS to control frame rate.
@@ -62,19 +59,16 @@ public:
 	 */
 	void setResolution(int type) {
 
-				std::cout<<"Setting resolution1"<<'\n';
 
 		if (type == 0) { width_ = 4416; height_ = 1242;} // 2K
 		if (type == 1) { width_ = 3840; height_ = 1080;} // FHD
 		if (type == 2) { width_ = 2560; height_ = 720;}  // HD
 		if (type == 3) { width_ = 1344; height_ = 376;}  // VGA
 
-				std::cout<<"Setting resolution2"<<'\n';
 
 		camera_->set(WIDTH_ID, width_);
 		camera_->set(HEIGHT_ID, height_);
 
-				std::cout<<"Setting resolution3"<<'\n';
 		// make sure that the number set are right from the hardware
 		width_ = camera_->get(WIDTH_ID);
 		height_ = camera_->get(HEIGHT_ID);
@@ -146,7 +140,7 @@ public:
 		private_nh.param("resolution", resolution_, 1);
 		private_nh.param("frame_rate", frame_rate_, 30.0);
 		private_nh.param("config_file_location", config_file_location_, std::string("~/SN1267.conf"));
-		private_nh.param("undistort_config_file_location", undistort_config_file_location_, std::string("~/SN1267.conf"));
+		//private_nh.param("undistort_config_file_location", undistort_config_file_location_, std::string("~/SN1267.conf"));
 		private_nh.param("left_frame_id", left_frame_id_, std::string("left_camera"));
 		private_nh.param("right_frame_id", right_frame_id_, std::string("right_camera"));
 		private_nh.param("show_image", show_image_, false);
@@ -185,7 +179,7 @@ public:
 			// get camera info from zed
 			try {
 				getZedCameraInfo(config_file_location_, resolution_, left_info, right_info);
-				getUndistortedMaps(undistort_config_file_location_);
+				getUndistortedMaps();
 			}
 			catch (std::runtime_error& e) {
 				ROS_INFO("Can't load camera info");
@@ -431,44 +425,15 @@ public:
 	}
 
 
-	void getUndistortedMaps(std::string config_file){
+	void getUndistortedMaps(){
 
-        cv::FileStorage fsSettings(config_file, cv::FileStorage::READ);
-        if(!fsSettings.isOpened())
-        {
-            std::cerr << "ERROR: Wrong path to settings" << "/n";
-            return ;
-        }
-
-        cv::Mat UK_l, UK_r, UP_l, UP_r, UR_l, UR_r, UD_l, UD_r;
-
-        fsSettings["LEFT.K"] >> UK_l;
-        fsSettings["RIGHT.K"] >> UK_r;
-
-        fsSettings["LEFT.P"] >> UP_l;
-        fsSettings["RIGHT.P"] >> UP_r;
-
-        fsSettings["LEFT.R"] >> UR_l;
-        fsSettings["RIGHT.R"] >> UR_r;
-
-        fsSettings["LEFT.D"] >> UD_l;
-        fsSettings["RIGHT.D"] >> UD_r;
-
-
-		int cols_l=WIDTH;
-		int rows_l=HEIGHT;
-		int cols_r=WIDTH;
-		int rows_r=HEIGHT;
-
-        
+       
         if(K_l.empty() || K_r.empty() || P_l.empty() || P_r.empty() || R_l.empty() || R_r.empty() || D_l.empty() || D_r.empty() ||
-                rows_l==0 || rows_r==0 || cols_l==0 || cols_r==0)
+                WIDTH==0 || HEIGHT==0)
         {
             std::cerr << "ERROR: Calibration parameters to rectify stereo are missing!" << "/n";
             return ;
         }
-
-        std::cout<<"WIDTH is: "<<WIDTH<<'\n';
 
         cv::initUndistortRectifyMap(K_l,D_l,R_l,P_l.rowRange(0,3).colRange(0,3),cv::Size(WIDTH/2,HEIGHT),CV_32F,M1l,M2l);
         cv::initUndistortRectifyMap(K_r,D_r,R_r,P_r.rowRange(0,3).colRange(0,3),cv::Size(WIDTH/2,HEIGHT),CV_32F,M1r,M2r);
