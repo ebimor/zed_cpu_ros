@@ -32,11 +32,16 @@ public:
 	 * @param[in]  frame_rate  The frame rate
 	 */
 	StereoCamera(int resolution, double frame_rate): frame_rate_(30.0) {
+				std::cout<<"Setting resolution4"<<'\n';
 
-		camera_ = new cv::VideoCapture(1);
+		camera_ = new cv::VideoCapture(0);
+						std::cout<<"Setting resolution5"<<'\n';
+
 		cv::Mat raw;
 		cv::Mat left_image;
 		cv::Mat right_image;
+						std::cout<<"Setting resolution6"<<'\n';
+
 		setResolution(resolution);
 		// // this function doesn't work very well in current Opencv 2.4, so, just use ROS to control frame rate.
 		// setFrameRate(frame_rate);
@@ -57,17 +62,23 @@ public:
 	 */
 	void setResolution(int type) {
 
+				std::cout<<"Setting resolution1"<<'\n';
+
 		if (type == 0) { width_ = 4416; height_ = 1242;} // 2K
 		if (type == 1) { width_ = 3840; height_ = 1080;} // FHD
 		if (type == 2) { width_ = 2560; height_ = 720;}  // HD
 		if (type == 3) { width_ = 1344; height_ = 376;}  // VGA
 
+				std::cout<<"Setting resolution2"<<'\n';
+
 		camera_->set(WIDTH_ID, width_);
 		camera_->set(HEIGHT_ID, height_);
 
+				std::cout<<"Setting resolution3"<<'\n';
 		// make sure that the number set are right from the hardware
 		width_ = camera_->get(WIDTH_ID);
 		height_ = camera_->get(HEIGHT_ID);
+
 
 	}
 
@@ -103,11 +114,13 @@ public:
 			return false;
 		}
 	}
-
-private:
-	cv::VideoCapture* camera_;
 	int width_;
 	int height_;
+
+private:
+
+	cv::VideoCapture* camera_;
+
 	double frame_rate_;
 	bool cv_three_;
 };
@@ -124,7 +137,9 @@ public:
 	 * @param[in]  resolution  The resolution
 	 * @param[in]  frame_rate  The frame rate
 	 */
-	ZedCameraROS() {
+
+
+	ZedCameraROS(){
 		ros::NodeHandle nh;
 		ros::NodeHandle private_nh("~");
 		// get ros param
@@ -142,6 +157,11 @@ public:
 		StereoCamera zed(resolution_, frame_rate_);
 		ROS_INFO("Initialized the camera");
 
+
+		WIDTH=zed.width_;
+		HEIGHT=zed.height_;
+
+
 		// setup publisher stuff
 		image_transport::ImageTransport it(nh);
 		image_transport::Publisher left_image_pub = it.advertise("left/image_raw", 1);
@@ -149,6 +169,9 @@ public:
 
 		image_transport::Publisher rec_left_image_pub = it.advertise("left/image_rectified", 1);
 		image_transport::Publisher rec_right_image_pub = it.advertise("right/image_rectified", 1);
+
+		image_transport::Publisher rec_whole_image_pub = it.advertise("wholeRecImage", 1);
+		image_transport::Publisher raw_whole_image_pub = it.advertise("wholeRawImage", 1);
 
 		ros::Publisher left_cam_info_pub = nh.advertise<sensor_msgs::CameraInfo>("left/camera_info", 1);
 		ros::Publisher right_cam_info_pub = nh.advertise<sensor_msgs::CameraInfo>("right/camera_info", 1);
@@ -190,7 +213,7 @@ public:
 
 		ROS_INFO("Got camera calibration files");
 		// loop to publish images;
-		cv::Mat left_image, right_image;
+		cv::Mat left_image, right_image, wholeRawImage;
 		ros::Rate r(frame_rate_);
 
 		while (nh.ok()) {
@@ -205,10 +228,13 @@ public:
 				cv::imshow("right", right_image);
 			}
 
+			hconcat(left_image,right_image,wholeRawImage);
+
 			if(rectify_image_){
-				cv::Mat imLeftRec, imRightRec;
+				cv::Mat imLeftRec, imRightRec, wholeRecImage;
         		cv::remap(left_image,imLeftRec,M1l,M2l,cv::INTER_LINEAR);
         		cv::remap(right_image,imRightRec,M1r,M2r,cv::INTER_LINEAR);
+        		hconcat(imLeftRec,imRightRec,wholeRecImage);
         		cv::imshow("left_rectified", imLeftRec);
 				if (rec_left_image_pub.getNumSubscribers() > 0) {
 					publishImage(imLeftRec, rec_left_image_pub, "rec_left_frame", now);
@@ -216,6 +242,13 @@ public:
 				if (rec_right_image_pub.getNumSubscribers() > 0) {
 					publishImage(imRightRec, rec_right_image_pub, "rec_right_frame", now);
 				}
+				if (rec_whole_image_pub.getNumSubscribers() > 0) {
+					publishImage(wholeRecImage, rec_whole_image_pub, "rec_whole_frame", now);
+				}
+			}
+
+			if (raw_whole_image_pub.getNumSubscribers() > 0) {
+				publishImage(wholeRawImage, raw_whole_image_pub, "raw_whole_frame", now);
 			}
 
 			if (left_image_pub.getNumSubscribers() > 0) {
@@ -292,6 +325,12 @@ public:
 		// assume zeros, maybe not right
 		double p1 = 0, p2 = 0, k3 = 0;
 
+		left_info.height=HEIGHT;
+		left_info.width=WIDTH;
+
+		right_info.height=HEIGHT;
+		right_info.width=WIDTH;
+
 		left_info.distortion_model = sensor_msgs::distortion_models::PLUMB_BOB;
 		right_info.distortion_model = sensor_msgs::distortion_models::PLUMB_BOB;
 
@@ -303,6 +342,9 @@ public:
 		left_info.D[2] = k3;
 		left_info.D[3] = p1;
 		left_info.D[4] = p2;
+
+		D_l=(cv::Mat1d(1,5) << l_k1, l_k2, k3, p1, p2);
+		D_r=(cv::Mat1d(1,5) << r_k1, r_k2, k3, p1, p2);
 
 		right_info.D.resize(5);
 		right_info.D[0] = r_k1;
@@ -329,6 +371,12 @@ public:
 		right_info.K[5] = r_cy;
 		right_info.K[8] = 1.0;
 
+		K_l = (cv::Mat1d(3, 3) << l_fx, 0, l_cx, 0, l_fy, l_cy, 0, 0, 1);
+		K_r = (cv::Mat1d(3, 3) << r_fx, 0, r_cx, 0, r_fy, r_cy, 0, 0, 1);
+
+		//std::cout<<"left focal length: "<<K_l.at<double>(0,0)<<'\n';
+
+
 		// rectification matrix
 		// Rl = R_rect, R_r = R * R_rect
 		// since R is identity, Rl = Rr;
@@ -342,7 +390,13 @@ public:
 		for (it = rmat.begin<double>(); it != rmat.end<double>(); ++it, id++){
 			left_info.R[id] = *it;
 			right_info.R[id] = *it;
+
 		}
+		R_r=rmat;
+		R_l=rmat;
+		//std::cout<<"left focal length: "<<R_l.at<double>(0,0)<<'\n';
+
+
 
 		// Projection/camera matrix
 		//     [fx'  0  cx' Tx]
@@ -362,6 +416,9 @@ public:
 		right_info.P[5] = r_fy;
 		right_info.P[6] = r_cy;
 		right_info.P[10] = 1.0;
+
+		P_l=(cv::Mat1d(3, 4) << l_fx, 0, l_cx, 0, 0, l_fy, l_cy, 0, 0, 0, 1, 0);
+		P_r=(cv::Mat1d(3, 4) << r_fx, 0, r_cx, -1 * l_fx * baseline, 0, r_fy, r_cy, 0, 0, 0, 1, 0);
 
 		left_info.width = right_info.width = width_;
 		left_info.height = right_info.height = height_;
@@ -383,24 +440,27 @@ public:
             return ;
         }
 
-        cv::Mat K_l, K_r, P_l, P_r, R_l, R_r, D_l, D_r;
-        fsSettings["LEFT.K"] >> K_l;
-        fsSettings["RIGHT.K"] >> K_r;
+        cv::Mat UK_l, UK_r, UP_l, UP_r, UR_l, UR_r, UD_l, UD_r;
 
-        fsSettings["LEFT.P"] >> P_l;
-        fsSettings["RIGHT.P"] >> P_r;
+        fsSettings["LEFT.K"] >> UK_l;
+        fsSettings["RIGHT.K"] >> UK_r;
 
-        fsSettings["LEFT.R"] >> R_l;
-        fsSettings["RIGHT.R"] >> R_r;
+        fsSettings["LEFT.P"] >> UP_l;
+        fsSettings["RIGHT.P"] >> UP_r;
 
-        fsSettings["LEFT.D"] >> D_l;
-        fsSettings["RIGHT.D"] >> D_r;
+        fsSettings["LEFT.R"] >> UR_l;
+        fsSettings["RIGHT.R"] >> UR_r;
 
-		int cols_l=672;
-		int rows_l=376;
-		int cols_r=672;
-		int rows_r=376;
+        fsSettings["LEFT.D"] >> UD_l;
+        fsSettings["RIGHT.D"] >> UD_r;
 
+
+		int cols_l=WIDTH;
+		int rows_l=HEIGHT;
+		int cols_r=WIDTH;
+		int rows_r=HEIGHT;
+
+        
         if(K_l.empty() || K_r.empty() || P_l.empty() || P_r.empty() || R_l.empty() || R_r.empty() || D_l.empty() || D_r.empty() ||
                 rows_l==0 || rows_r==0 || cols_l==0 || cols_r==0)
         {
@@ -408,8 +468,10 @@ public:
             return ;
         }
 
-        cv::initUndistortRectifyMap(K_l,D_l,R_l,P_l.rowRange(0,3).colRange(0,3),cv::Size(cols_l,rows_l),CV_32F,M1l,M2l);
-        cv::initUndistortRectifyMap(K_r,D_r,R_r,P_r.rowRange(0,3).colRange(0,3),cv::Size(cols_r,rows_r),CV_32F,M1r,M2r);
+        std::cout<<"WIDTH is: "<<WIDTH<<'\n';
+
+        cv::initUndistortRectifyMap(K_l,D_l,R_l,P_l.rowRange(0,3).colRange(0,3),cv::Size(WIDTH/2,HEIGHT),CV_32F,M1l,M2l);
+        cv::initUndistortRectifyMap(K_r,D_r,R_r,P_r.rowRange(0,3).colRange(0,3),cv::Size(WIDTH/2,HEIGHT),CV_32F,M1r,M2r);
 
 	}
 
@@ -444,6 +506,8 @@ public:
 	}
 
 private:
+	int WIDTH, HEIGHT;
+    cv::Mat K_l, K_r, P_l, P_r, R_l, R_r, D_l, D_r;
 	int resolution_;
 	double frame_rate_;
 	bool show_image_, load_zed_config_, rectify_image_;

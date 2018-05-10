@@ -12,14 +12,14 @@ find_package(catkin REQUIRED
         )
 # set(CMAKE_CXX_FLAGS "-std=c++0x ${CMAKE_CXX_FLAGS}")
 
-# find_package(Eigen3 REQUIRED)
+find_package(Eigen3 REQUIRED)
 find_package(Boost REQUIRED)
 find_package(OpenCV REQUIRED)
 
 include_directories(
     include
     ${catkin_INCLUDE_DIRS}
-    ${EIGEN_INCLUDE_DIRS}
+    ${EIGEN3_INCLUDE_DIRS}
     ${OpenCV_INCLUDE_DIRS}
     )
 
